@@ -5,7 +5,7 @@ projectdir := $(shell pwd)
 .PHONY := clean compile test test_travis package deps
 
 package: compile
-	(cd src/main/resources/surveyman.js && npm run webpack)
+	(cd src/main/resources/surveyman.js && npm install &&  npm run webpack)
 	mvn package -DskipTests
 	unzip -o lib/aws-mturk-clt.jar
 	unzip -o lib/aws-mturk-dataschema.jar
@@ -33,4 +33,4 @@ deps: lib/java-aws-mturk.jar
 	mvn install:install-file $(mvnargs) -Dfile=$(projectdir)/lib/aws-mturk-wsdl.jar -DartifactId=aws-mturk-wsdl
 
 lib/java-aws-mturk.jar:
-	./scripts/setup.sh
+	./scripts/setup.sh 
