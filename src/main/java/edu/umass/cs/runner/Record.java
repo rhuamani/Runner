@@ -132,12 +132,11 @@ public class Record implements Serializable {
     }
 
     private String getBreakoffMessage() {
-        try {
-            return (String) this.library.props.get(Parameters.BREAKOFF_MESSAGE);
-        } catch (Exception e) {
+        String msg = (String) this.library.props.get(Parameters.BREAKOFF_MESSAGE);
+        if (msg == null) {
             this.library.props.setProperty(Parameters.BREAKOFF_MESSAGE, AbstractLibrary.DEFAULT_BREAKOFF_MESSAGE);
             return AbstractLibrary.DEFAULT_BREAKOFF_MESSAGE;
-        }
+        } else return msg;
     }
 
     private double computeExpectedCost() {
