@@ -1,5 +1,6 @@
 package edu.umass.cs.runner;
 
+import clojure.lang.ArraySeq;
 import edu.umass.cs.runner.system.QuestionResponse;
 import edu.umass.cs.runner.system.SurveyResponse;
 import edu.umass.cs.surveyman.analyses.IQuestionResponse;
@@ -8,6 +9,7 @@ import edu.umass.cs.surveyman.survey.HTMLDatum;
 import edu.umass.cs.surveyman.survey.InputOutputKeys;
 import edu.umass.cs.surveyman.survey.StringDatum;
 import edu.umass.cs.surveyman.survey.Survey;
+import javafx.scene.control.Cell;
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.jetty.io.RuntimeIOException;
 import org.supercsv.cellprocessor.constraint.NotNull;
@@ -16,6 +18,7 @@ import org.supercsv.cellprocessor.ift.CellProcessor;
 import org.supercsv.io.CsvListWriter;
 import org.supercsv.io.ICsvListWriter;
 import org.supercsv.prefs.CsvPreference;
+import org.supercsv.util.CsvContext;
 
 
 import java.io.*;
@@ -32,16 +35,19 @@ public class ResponseWriter {
             , "optionid", "optiontext", "optionpos"};
     public static final String sep = ",";
     public static final String newline = "\r\n";
-    public static final CellProcessor[] defaultProcessors = new CellProcessor[] {
-            new NotNull(), // responseid
-            new NotNull(), // workerid
-            new NotNull(), // surveyid
-            new NotNull(), // questionid
-            new NotNull(), // questiontext
-            new NotNull(), // optionid
-            new NotNull(), // optiontext
-            new NotNull() // optionpos
-    };
+//    public static final CellProcessor[] defaultProcessors = new CellProcessor[] {
+//            new NotNull(), // responseid
+//            new NotNull(), // workerid
+//            new NotNull(), // surveyid
+//            new NotNull(), // questionid
+//            new NotNull(), // questiontext
+//            new NotNull(), // optionid
+//            new NotNull(), // optiontext
+//            new NotNull() // optionpos
+//    };
+
+    //new list of all processors
+    public List<CellProcessor> defProcessors = new ArrayList<>();
 
     public final Survey survey;
     public final List<String> backendHeaders;
@@ -53,10 +59,15 @@ public class ResponseWriter {
         this.backendHeaders = record.library.getBackendHeaders();
         this.outputFile = new File(record.outputFileName);
         try {
-            PrintWriter pw = new PrintWriter(new FileWriter(this.outputFile, true));
-            writeHeaders(pw);
+            //for 8 default headers
+            for (int i = 0 ; i < 8 ; i++){
+                defProcessors.add(new NotNull());
+            }
+            CsvListWriter writer = new CsvListWriter(new FileWriter(this.outputFile) , CsvPreference.STANDARD_PREFERENCE);
+            writeHeaders(writer);
+
             this.writtenHeaders = true;
-            pw.close();
+
         } catch (IOException io) {
             throw new RuntimeIOException(io);
         }
@@ -68,33 +79,38 @@ public class ResponseWriter {
         // default headers
         s.add(defaultHeaders[0]);
         for (String header : Arrays.asList(defaultHeaders).subList(1, defaultHeaders.length))
-            s.add(String.format("%s%s", sep, header));
+            s.add(header);
 
         // user-provided other headers
         if (survey.otherHeaders != null)
             for (String header : survey.otherHeaders)
-                s.add(String.format("%s%s", sep, header));
+                s.add(header);
+                defProcessors.add(new NotNull());
 
         // mturk-provided other headers
         Collections.sort(backendHeaders);
         for (String key : backendHeaders)
-            s.add(String.format("%s%s", sep, key));
+            s.add(key);
+            defProcessors.add(new NotNull());
 
         //correlation
         if (survey.correlationMap != null && !survey.correlationMap.isEmpty())
             s.add(String.format("%s%s", sep, InputOutputKeys.CORRELATION));
+            defProcessors.add(new NotNull());
 
-        s.add("\r\n");
         Runner.LOGGER.info("headers:" + s.toString());
         return s;
     }
 
     private CellProcessor[] getCellProcessors() {
 
+        CellProcessor[] processors = new CellProcessor[defProcessors.size()];
 
-
+        for (int i= 0 ; i < processors.length;i++){
+            processors[i] = defProcessors.get(i);
+        }
         // returns all of the cell processors (including the custom ones and the mturk backend ones
-        return new CellProcessor[]{};
+        return processors;
     }
 
     public void writeHeaders(CsvListWriter wr) throws IOException
@@ -103,34 +119,25 @@ public class ResponseWriter {
         String[] headerArray = new String[headers.size()];
         headerArray = headers.toArray(headerArray);
         wr.writeHeader(headerArray);
-
-
     }
 
-    public void writeResponse(PrintWriter pw, SurveyResponse sr) throws IOException {
+    public void writeResponse(SurveyResponse sr) throws IOException {
         // TODO: write response using cell processors.
-
         CsvListWriter writer = null;
-
         try {
             writer = new CsvListWriter(new FileWriter(outputFile) , CsvPreference.STANDARD_PREFERENCE);
-
-            CellProcessor[] processors = getCellProcessors();
-            writeHeaders(writer);
 
             List<IQuestionResponse> responses=  sr.getAllResponses();
 
             for (IQuestionResponse response: responses){
 
-                writer.write(response, getHeaders(), processors);
-
+                writer.write(response, getHeaders(), getCellProcessors());
             }
             sr.setRecorded(true);
 
         }catch (FileNotFoundException io ){
             throw new FileNotFoundException();
         }
-
 
     }
 
@@ -216,12 +223,8 @@ public class ResponseWriter {
 
         StringBuilder retval = new StringBuilder();
 
-        //assert sr.getAllResponses().size() > 0 : "Cannot have 0 responses to a survey!!";
-
         for (IQuestionResponse qr : sr.resultsAsMap().values())
             retval.append(outputQuestionResponse(survey, qr, sr));
-
-        //assert retval.length() != 0 : "Cannot have a survey response of length 0!!";
 
         return retval.toString();
     }
