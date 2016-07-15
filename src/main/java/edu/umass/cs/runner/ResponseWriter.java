@@ -1,5 +1,6 @@
 package edu.umass.cs.runner;
 
+import edu.umass.cs.runner.system.QuestionResponse;
 import edu.umass.cs.runner.system.SurveyResponse;
 import edu.umass.cs.surveyman.analyses.IQuestionResponse;
 import edu.umass.cs.surveyman.analyses.OptTuple;
@@ -12,10 +13,12 @@ import org.eclipse.jetty.io.RuntimeIOException;
 import org.supercsv.cellprocessor.constraint.NotNull;
 import org.supercsv.cellprocessor.ift.CellProcessor;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.PrintWriter;
+import org.supercsv.io.CsvListWriter;
+import org.supercsv.io.ICsvListWriter;
+import org.supercsv.prefs.CsvPreference;
+
+
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -65,43 +68,70 @@ public class ResponseWriter {
         // default headers
         s.add(defaultHeaders[0]);
         for (String header : Arrays.asList(defaultHeaders).subList(1, defaultHeaders.length))
-            s.append(String.format("%s%s", sep, header));
+            s.add(String.format("%s%s", sep, header));
 
         // user-provided other headers
         if (survey.otherHeaders != null)
             for (String header : survey.otherHeaders)
-                s.append(String.format("%s%s", sep, header));
+                s.add(String.format("%s%s", sep, header));
 
         // mturk-provided other headers
         Collections.sort(backendHeaders);
         for (String key : backendHeaders)
-            s.append(String.format("%s%s", sep, key));
+            s.add(String.format("%s%s", sep, key));
 
         //correlation
         if (survey.correlationMap != null && !survey.correlationMap.isEmpty())
-            s.append(String.format("%s%s", sep, InputOutputKeys.CORRELATION));
+            s.add(String.format("%s%s", sep, InputOutputKeys.CORRELATION));
 
-        s.append("\r\n");
+        s.add("\r\n");
         Runner.LOGGER.info("headers:" + s.toString());
         return s;
     }
 
     private CellProcessor[] getCellProcessors() {
+
+
+
         // returns all of the cell processors (including the custom ones and the mturk backend ones
         return new CellProcessor[]{};
     }
 
-    public void writeHeaders(PrintWriter pw) throws IOException
+    public void writeHeaders(CsvListWriter wr) throws IOException
     {
         List<String> headers = getHeaders();
-        // this isn't using cell processors right now, but should maybe be updated to do so later
-        pw.write(StringUtils.join(headers, ","));
-        pw.flush();
+        String[] headerArray = new String[headers.size()];
+        headerArray = headers.toArray(headerArray);
+        wr.writeHeader(headerArray);
+
+
     }
 
     public void writeResponse(PrintWriter pw, SurveyResponse sr) throws IOException {
         // TODO: write response using cell processors.
-        sr.setRecorded(true);
+
+        CsvListWriter writer = null;
+
+        try {
+            writer = new CsvListWriter(new FileWriter(outputFile) , CsvPreference.STANDARD_PREFERENCE);
+
+            CellProcessor[] processors = getCellProcessors();
+            writeHeaders(writer);
+
+            List<IQuestionResponse> responses=  sr.getAllResponses();
+
+            for (IQuestionResponse response: responses){
+
+                writer.write(response, getHeaders(), processors);
+
+            }
+            sr.setRecorded(true);
+
+        }catch (FileNotFoundException io ){
+            throw new FileNotFoundException();
+        }
+
+
     }
 
     private static String outputQuestionResponse(
